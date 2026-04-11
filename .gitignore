@@ -1,0 +1,54 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+*.egg-info/
+dist/
+build/
+*.egg
+
+# Virtual Environment
+venv/
+.venv/
+env/
+
+# Environment & Credentials (IMPORTANT!)
+.env
+client_secrets.json
+oauth_token.json
+cookies.txt
+*.json.bak
+
+# Downloaded/Processed Videos
+downloads/*
+processed/*
+backups/*
+!downloads/.gitkeep
+!processed/.gitkeep
+!backups/.gitkeep
+
+# Logs
+logs/*
+!logs/.gitkeep
+
+# State
+data/state.json
+state_backup.json
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Temporary files
+*.tmp
+*.temp
+*.log

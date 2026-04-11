@@ -1,0 +1,98 @@
+name: Trailer Detection Cron
+
+on:
+  schedule:
+    # Run every 30 minutes
+    - cron: '*/30 * * * *'
+  workflow_dispatch:
+    # Allow manual trigger
+
+jobs:
+  detect-and-upload:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: Install FFmpeg
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ffmpeg
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install --upgrade yt-dlp
+
+      - name: Create directories
+        run: |
+          mkdir -p downloads processed backups logs data
+
+      - name: Create .env file
+        run: |
+          cat > .env << EOF
+          GOOGLE_CLIENT_SECRETS_FILE=client_secrets.json
+          GOOGLE_OAUTH_TOKEN_FILE=oauth_token.json
+          YOUTUBE_CHANNEL_ID=${{ secrets.YOUTUBE_CHANNEL_ID }}
+          MONITORED_CHANNEL_IDS=${{ secrets.MONITORED_CHANNEL_IDS }}
+          GOOGLE_DRIVE_FOLDER_ID=${{ secrets.GOOGLE_DRIVE_FOLDER_ID }}
+          GEMINI_API_KEY=${{ secrets.GEMINI_API_KEY }}
+          TELEGRAM_BOT_TOKEN=${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID=${{ secrets.TELEGRAM_CHAT_ID }}
+          MAX_DAILY_UPLOADS=${{ secrets.MAX_DAILY_UPLOADS }}
+          UPLOAD_TIME_WINDOWS=${{ secrets.UPLOAD_TIME_WINDOWS }}
+          FFMPEG_MIRROR=true
+          FFMPEG_SPEED=1.05
+          FFMPEG_CROP_PERCENT=3
+          FFMPEG_BRIGHTNESS=0.02
+          FFMPEG_CONTRAST=1.02
+          FFMPEG_SATURATION=1.03
+          EOF
+
+      - name: Restore state
+        run: |
+          # Try to restore state from previous run
+          if [ -f state_backup.json ]; then
+            cp state_backup.json data/state.json
+            echo "State restored from backup"
+          else
+            echo "No previous state found, starting fresh"
+          fi
+
+      - name: Write credentials
+        run: |
+          # Write client_secrets.json from secrets
+          echo '${{ secrets.GOOGLE_CLIENT_SECRETS }}' > client_secrets.json
+          # Write oauth_token.json from secrets
+          echo '${{ secrets.GOOGLE_OAUTH_TOKEN }}' > oauth_token.json
+
+      - name: Run trailer automation
+        run: |
+          python main.py --once
+
+      - name: Backup state
+        if: always()
+        run: |
+          if [ -f data/state.json ]; then
+            cp data/state.json state_backup.json
+            git config user.name "Trailer Bot"
+            git config user.email "bot@trailer-automation.com"
+            git add state_backup.json
+            git diff --cached --quiet || git commit -m "chore: update state [skip ci]"
+            git push
+          fi
+
+      - name: Cleanup
+        if: always()
+        run: |
+          rm -f client_secrets.json oauth_token.json
+          rm -rf downloads/* processed/*
