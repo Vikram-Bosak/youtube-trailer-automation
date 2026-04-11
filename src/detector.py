@@ -36,11 +36,9 @@ class TrailerDetector:
         Initialize the detector.
         
         Args:
-            api_key: YouTube Data API key. Uses GEMINI_API_KEY or config if not provided.
-                     Note: For channel monitoring, we can also use yt-dlp RSS feeds
-                     which don't require API key.
+            api_key: YouTube Data API key. Uses config.YOUTUBE_API_KEY if not provided.
         """
-        self.api_key = api_key
+        self.api_key = api_key or config.YOUTUBE_API_KEY
         self.youtube = None
         if self.api_key:
             try:

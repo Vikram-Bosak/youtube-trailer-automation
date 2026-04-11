@@ -23,14 +23,30 @@ for d in [DOWNLOAD_DIR, PROCESSED_DIR, BACKUP_DIR, LOG_DIR, STATE_FILE.parent]:
     d.mkdir(parents=True, exist_ok=True)
 
 # --- Google Cloud / YouTube ---
+# --- Google Cloud / YouTube ---
 GOOGLE_CLIENT_SECRETS_FILE = os.getenv("GOOGLE_CLIENT_SECRETS_FILE", "client_secrets.json")
 GOOGLE_OAUTH_TOKEN_FILE = os.getenv("GOOGLE_OAUTH_TOKEN_FILE", "oauth_token.json")
 YOUTUBE_CHANNEL_ID = os.getenv("YOUTUBE_CHANNEL_ID", "")
+YOUTUBE_API_KEY = os.getenv("YOUTUBE_API_KEY", "")
 MONITORED_CHANNEL_IDS = [
     cid.strip()
     for cid in os.getenv("MONITORED_CHANNEL_IDS", "").split(",")
     if cid.strip()
 ]
+
+# Channel name mapping for reference
+CHANNEL_NAMES = {
+    "UCxwitsUVNzwS5XBSC5UQV8Q": "Marvel",
+    "UCjmJDM5pRKbUlVIzDYYWb6g": "Warner Bros Pictures",
+    "UCq7OHvWO6Z3u-LztFdrcU-g": "Universal Pictures",
+    "UCP8AC-LXl5Jmp64IRIsdacg": "Sony Pictures",
+    "UCF9imwPMSGz4Vq1NiTWCC7g": "Paramount Pictures",
+    "UCi_MYg8bBEbfIHfLRxGd_Eg": "20th Century Studios",
+    "UCjxbNJToHJDC18bdIV7Q9Sg": "Walt Disney Studios",
+    "UCFR6sruqEq52xEqjE84tq4A": "Lionsgate Movies",
+    "UCU4SM3j_9TNWaSu8KdGV50g": "Focus Features",
+    "UCor9rW6PgxSQ9vUPWQdnaYQ": "Searchlight Pictures",
+}
 
 # --- Google Drive ---
 GOOGLE_DRIVE_FOLDER_ID = os.getenv("GOOGLE_DRIVE_FOLDER_ID", "")
