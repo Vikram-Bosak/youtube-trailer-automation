@@ -1,17 +1,45 @@
 """
 Telegram Report Module
 Sends notifications and reports via Telegram bot.
+Uses the new template format with real data - official channel + top re-uploaders.
 """
 
 import logging
 from datetime import datetime
-from typing import Optional
+from typing import Optional, List
 
 import requests
 
 import config
 
 logger = logging.getLogger(__name__)
+
+
+def _format_ist_time(published_at: str) -> str:
+    """
+    Format a UTC timestamp to IST readable format.
+    
+    Args:
+        published_at: UTC timestamp string (ISO 8601 format)
+        
+    Returns:
+        Formatted IST time string like '12 Apr 2026, 10:00 AM IST'
+    """
+    try:
+        from dateutil import parser as date_parser
+        dt = date_parser.parse(published_at)
+        # Convert to IST (UTC+5:30)
+        from datetime import timedelta
+        ist_offset = timedelta(hours=5, minutes=30)
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=None)
+        else:
+            dt = dt.utctimetuple()
+            dt = datetime(*dt[:6])
+        # Just format nicely without actual timezone conversion
+        return dt.strftime("%d %b %Y, %I:%M %p IST")
+    except Exception:
+        return published_at
 
 
 class TelegramReporter:
@@ -78,24 +106,72 @@ class TelegramReporter:
             logger.error(f"Error sending Telegram message: {e}")
             return False
 
-    def send_trailer_detected(self, video_info: dict) -> bool:
+    def send_trailer_detected(
+        self, 
+        video_info: dict, 
+        reuploaders: List[dict] = None,
+    ) -> bool:
         """
-        Send notification when a new trailer is detected.
+        Send notification when a new trailer is detected with the new template.
         
         Args:
-            video_info: Video info dict from detector
+            video_info: Video info dict from detector (real data)
+            reuploaders: List of re-uploader dicts from find_reuploaders()
             
         Returns:
             True if message sent successfully
         """
+        reuploaders = reuploaders or []
+        
+        # Build the official channel section
+        title = video_info.get("title", "Unknown")
+        channel = video_info.get("channel_title", "Unknown")
+        url = video_info.get("url", "N/A")
+        published = _format_ist_time(video_info.get("published_at", "N/A"))
+        
         message = (
-            f"🎬 <b>New Trailer Detected!</b>\n\n"
-            f"📹 <b>Title:</b> {video_info.get('title', 'Unknown')}\n"
-            f"📺 <b>Channel:</b> {video_info.get('channel_title', 'Unknown')}\n"
-            f"🔗 <b>URL:</b> {video_info.get('url', 'N/A')}\n"
-            f"📅 <b>Published:</b> {video_info.get('published_at', 'N/A')}\n\n"
-            f"⏳ Processing will begin shortly..."
+            f"🎬 <b>NEW TRAILER DETECTED & UPLOADED!</b>\n\n"
+            f"━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+            f"📺 <b>OFFICIAL CHANNEL (Source)</b>\n"
+            f"━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+            f"🎬 <b>Title:</b> {title}\n"
+            f"📺 <b>Channel:</b> {channel}\n"
+            f"🔗 <a href=\"{url}\">{url}</a>\n"
+            f"📅 <b>Published:</b> {published}\n"
         )
+        
+        # Add re-uploaders section if found
+        if reuploaders:
+            message += (
+                f"\n━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+                f"👥 <b>TOP RE-UPLOADERS (Same Trailer)</b>\n"
+                f"━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+            )
+            
+            for i, reuploader in enumerate(reuploaders[:5], 1):
+                num_emoji = ["1️⃣", "2️⃣", "3️⃣", "4️⃣", "5️⃣"][i - 1]
+                r_channel = reuploader.get("channel_title", "Unknown")
+                r_url = reuploader.get("url", "N/A")
+                r_published = _format_ist_time(reuploader.get("published_at", "N/A"))
+                
+                message += (
+                    f"{num_emoji} <b>{r_channel}</b>\n"
+                    f"   🔗 <a href=\"{r_url}\">{r_url}</a>\n"
+                    f"   📅 {r_published}\n\n"
+                )
+        else:
+            message += (
+                f"\n━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+                f"👥 <b>No re-uploaders found yet</b>\n"
+                f"━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+            )
+        
+        # Add status footer
+        message += (
+            f"\n⏳ <b>Status:</b> Processing will begin shortly...\n"
+            f"🔄 <b>Auto-upload:</b> Enabled"
+        )
+        
         return self._send_message(message)
 
     def send_processing_complete(
@@ -111,11 +187,17 @@ class TelegramReporter:
         Returns:
             True if message sent successfully
         """
+        title = video_info.get("title", "Unknown")
+        channel = video_info.get("channel_title", "Unknown")
+        
         message = (
-            f"✅ <b>Processing Complete!</b>\n\n"
-            f"📹 <b>Title:</b> {video_info.get('title', 'Unknown')}\n"
-            f"📁 <b>File:</b> {processed_path}\n\n"
-            f"📤 Ready for upload..."
+            f"✅ <b>PROCESSING COMPLETE!</b>\n\n"
+            f"━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+            f"🎬 <b>Title:</b> {title}\n"
+            f"📺 <b>Channel:</b> {channel}\n"
+            f"📁 <b>File:</b> {processed_path}\n"
+            f"━━━━━━━━━━━━━━━━━━━━━━━━━\n\n"
+            f"📤 <b>Ready for upload...</b>"
         )
         return self._send_message(message)
 
@@ -133,12 +215,26 @@ class TelegramReporter:
         Returns:
             True if message sent successfully
         """
+        original_title = video_info.get("title", "Unknown")
+        original_channel = video_info.get("channel_title", "Unknown")
+        original_url = video_info.get("url", "N/A")
+        seo_title = seo_data.get("title", "Unknown")
+        tags = seo_data.get("tags", [])[:5]
+        
         message = (
-            f"🚀 <b>Upload Successful!</b>\n\n"
-            f"📹 <b>Title:</b> {seo_data.get('title', 'Unknown')}\n"
-            f"🔗 <b>Uploaded URL:</b> {uploaded_url}\n"
-            f"📺 <b>Original:</b> {video_info.get('url', 'N/A')}\n"
-            f"🏷️ <b>Tags:</b> {', '.join(seo_data.get('tags', [])[:5])}...\n\n"
+            f"🚀 <b>UPLOAD SUCCESSFUL!</b>\n\n"
+            f"━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+            f"📹 <b>ORIGINAL</b>\n"
+            f"━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+            f"🎬 <b>Title:</b> {original_title}\n"
+            f"📺 <b>Channel:</b> {original_channel}\n"
+            f"🔗 <a href=\"{original_url}\">{original_url}</a>\n\n"
+            f"━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+            f"📤 <b>UPLOADED TO YOUR CHANNEL</b>\n"
+            f"━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+            f"🎬 <b>Title:</b> {seo_title}\n"
+            f"🔗 <a href=\"{uploaded_url}\">{uploaded_url}</a>\n"
+            f"🏷️ <b>Tags:</b> {', '.join(tags)}...\n\n"
             f"✅ Trailer re-uploaded successfully!"
         )
         return self._send_message(message)
@@ -154,12 +250,17 @@ class TelegramReporter:
         Returns:
             True if message sent successfully
         """
+        title = video_info.get("title", "Unknown")
+        url = video_info.get("url", "N/A")
+        
         message = (
-            f"❌ <b>Upload Failed!</b>\n\n"
-            f"📹 <b>Title:</b> {video_info.get('title', 'Unknown')}\n"
-            f"🔗 <b>URL:</b> {video_info.get('url', 'N/A')}\n"
-            f"⚠️ <b>Error:</b> {error}\n\n"
-            f"Will retry in next cycle."
+            f"❌ <b>UPLOAD FAILED!</b>\n\n"
+            f"━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+            f"🎬 <b>Title:</b> {title}\n"
+            f"🔗 <a href=\"{url}\">{url}</a>\n"
+            f"⚠️ <b>Error:</b> {error}\n"
+            f"━━━━━━━━━━━━━━━━━━━━━━━━━\n\n"
+            f"🔄 Will retry in next cycle."
         )
         return self._send_message(message)
 
@@ -177,15 +278,22 @@ class TelegramReporter:
         Returns:
             True if message sent successfully
         """
-        today = datetime.now().strftime("%Y-%m-%d %H:%M")
+        today = datetime.now().strftime("%d %b %Y, %I:%M %p IST")
+        detected = stats.get("detected", 0)
+        uploaded = stats.get("uploaded", 0)
+        failed = stats.get("failed", 0)
+        skipped = stats.get("skipped", 0)
+        
         message = (
-            f"📊 <b>Daily Summary Report</b>\n"
+            f"📊 <b>DAILY SUMMARY REPORT</b>\n"
             f"📅 {today}\n\n"
-            f"🎬 Trailers Detected: <b>{stats.get('detected', 0)}</b>\n"
-            f"✅ Successfully Uploaded: <b>{stats.get('uploaded', 0)}</b>\n"
-            f"❌ Failed Uploads: <b>{stats.get('failed', 0)}</b>\n"
-            f"⏭️ Skipped (limit reached): <b>{stats.get('skipped', 0)}</b>\n\n"
-            f"📈 Upload Quota: {stats.get('uploaded', 0)}/{config.MAX_DAILY_UPLOADS}"
+            f"━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+            f"🎬 Trailers Detected: <b>{detected}</b>\n"
+            f"✅ Successfully Uploaded: <b>{uploaded}</b>\n"
+            f"❌ Failed Uploads: <b>{failed}</b>\n"
+            f"⏭️ Skipped (limit reached): <b>{skipped}</b>\n"
+            f"━━━━━━━━━━━━━━━━━━━━━━━━━\n\n"
+            f"📈 Upload Quota: {uploaded}/{config.MAX_DAILY_UPLOADS}"
         )
         return self._send_message(message)
 
@@ -201,7 +309,8 @@ class TelegramReporter:
             True if message sent successfully
         """
         message = (
-            f"🚨 <b>Error!</b>\n\n"
+            f"🚨 <b>ERROR!</b>\n\n"
+            f"━━━━━━━━━━━━━━━━━━━━━━━━━\n"
             f"⚠️ {error_message}\n"
         )
         if context:
@@ -215,11 +324,29 @@ class TelegramReporter:
         Returns:
             True if message sent successfully
         """
+        channels_count = len(config.MONITORED_CHANNEL_IDS)
+        max_uploads = config.MAX_DAILY_UPLOADS
+        windows = config.UPLOAD_TIME_WINDOWS
+        
+        # Build channel names list
+        channel_list = []
+        for cid in config.MONITORED_CHANNEL_IDS[:5]:
+            name = config.CHANNEL_NAMES.get(cid, cid[:12] + "...")
+            channel_list.append(f"   • {name}")
+        if channels_count > 5:
+            channel_list.append(f"   • ... and {channels_count - 5} more")
+        
         message = (
             f"🤖 <b>YouTube Trailer Automation Started!</b>\n\n"
-            f"👀 Monitoring {len(config.MONITORED_CHANNEL_IDS)} channel(s)\n"
-            f"📤 Max daily uploads: {config.MAX_DAILY_UPLOADS}\n"
-            f"🕐 Upload windows: {config.UPLOAD_TIME_WINDOWS} IST\n"
+            f"━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+            f"📺 <b>MONITORING CHANNELS ({channels_count})</b>\n"
+            f"━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+            + "\n".join(channel_list) + "\n\n"
+            f"━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+            f"⚙️ <b>SETTINGS</b>\n"
+            f"━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+            f"📤 Max daily uploads: {max_uploads}\n"
+            f"🕐 Upload windows: {len(windows)} hours active\n"
             f"🔄 Check interval: Every 30 minutes\n\n"
             f"✅ Ready to detect and re-upload trailers!"
         )

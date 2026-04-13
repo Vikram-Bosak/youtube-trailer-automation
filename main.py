@@ -83,8 +83,14 @@ class TrailerAutomation:
         original_title = video_info.get("title", "Unknown")
 
         try:
-            # Step 1: Notify detection
-            self.reporter.send_trailer_detected(video_info)
+            # Step 1: Find re-uploaders (other channels that uploaded same trailer)
+            logger.info(f"[0/6] Finding re-uploaders for: {original_title}")
+            reuploaders = self.detector.find_reuploaders(video_info, max_results=5)
+            video_info["reuploaders"] = reuploaders
+            logger.info(f"Found {len(reuploaders)} re-uploader(s)")
+
+            # Step 1b: Notify detection with real data + re-uploaders
+            self.reporter.send_trailer_detected(video_info, reuploaders=reuploaders)
 
             # Step 2: Download
             logger.info(f"[1/6] Downloading: {original_title}")

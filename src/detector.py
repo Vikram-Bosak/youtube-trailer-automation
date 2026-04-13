@@ -195,6 +195,79 @@ class TrailerDetector:
         
         return has_trailer_keyword and not has_exclude_keyword
 
+    def find_reuploaders(self, video_info: dict, max_results: int = 5) -> List[dict]:
+        """
+        Search YouTube for other channels that uploaded the same trailer.
+        
+        Args:
+            video_info: Original video info dict
+            max_results: Maximum number of re-uploaders to return
+            
+        Returns:
+            List of re-uploader dicts with channel_title, url, published_at
+        """
+        if not self.youtube:
+            logger.warning("YouTube API client not available, cannot find re-uploaders")
+            return []
+
+        original_video_id = video_info.get("video_id", "")
+        title = video_info.get("title", "")
+        
+        # Extract a clean search query from the title
+        import re
+        # Remove special chars, keep alphanumeric and spaces
+        search_query = re.sub(r'[^\w\s]', ' ', title)
+        # Remove extra spaces
+        search_query = ' '.join(search_query.split())
+        
+        if not search_query:
+            return []
+
+        reuploaders = []
+        try:
+            request = self.youtube.search().list(
+                part="snippet",
+                q=search_query,
+                type="video",
+                maxResults=max_results + 5,  # Get extra to filter out original
+                order="relevance",
+                publishedAfter=(
+                    datetime.utcnow() - timedelta(days=7)
+                ).strftime("%Y-%m-%dT%H:%M:%SZ"),
+            )
+            response = request.execute()
+
+            for item in response.get("items", []):
+                vid_id = item["id"].get("videoId", "")
+                
+                # Skip the original video itself
+                if vid_id == original_video_id:
+                    continue
+                
+                # Skip if same channel as original
+                channel_id = item["snippet"].get("channelId", "")
+                original_channel = video_info.get("channel_id", "")
+                if channel_id and channel_id == original_channel:
+                    continue
+
+                reuploader = {
+                    "channel_title": item["snippet"]["channelTitle"],
+                    "video_id": vid_id,
+                    "url": f"https://www.youtube.com/watch?v={vid_id}",
+                    "published_at": item["snippet"]["publishedAt"],
+                    "title": item["snippet"]["title"],
+                    "thumbnail": item["snippet"]["thumbnails"].get("high", {}).get("url", ""),
+                }
+                reuploaders.append(reuploader)
+                
+                if len(reuploaders) >= max_results:
+                    break
+
+        except HttpError as e:
+            logger.error(f"Error searching for re-uploaders: {e}")
+
+        return reuploaders
+
     def detect_new_trailers(self, hours: int = 24, processed_ids: set = None) -> List[dict]:
         """
         Scan all monitored channels for new trailers.
