@@ -1,1 +1,6 @@
-{"processed_videos":{}, "daily_upload_count":0, "last_upload_date":null, "last_scan":null}
+{
+  "processed_videos": {},
+  "daily_upload_count": 0,
+  "last_upload_date": "2026-04-13",
+  "last_scan": null
+}
