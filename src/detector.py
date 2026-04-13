@@ -24,7 +24,9 @@ TRAILER_KEYWORDS = [
 # Keywords to exclude
 EXCLUDE_KEYWORDS = [
     "reaction", "review", "breakdown", "analysis", "explained",
-    "fan made", "fan-made", "concept", "recap", "summary"
+    "fan made", "fan-made", "concept", "recap", "summary",
+    "full movie", "full episode", "gameplay", "behind the scenes",
+    "bts", "making of", "interview", "clip", "scene", "featurette"
 ]
 
 

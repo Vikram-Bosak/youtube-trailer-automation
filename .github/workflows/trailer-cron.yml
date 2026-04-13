@@ -2,7 +2,7 @@ name: Trailer Detection Cron
 
 on:
   schedule:
-    # Run every 30 minutes
+    # Run every 30 minutes, 24/7
     - cron: '*/30 * * * *'
   workflow_dispatch:
     # Allow manual trigger
@@ -39,24 +39,24 @@ jobs:
 
       - name: Create .env file
         run: |
-          cat > .env << EOF
+          cat > .env << 'ENVEOF'
           GOOGLE_CLIENT_SECRETS_FILE=client_secrets.json
           GOOGLE_OAUTH_TOKEN_FILE=oauth_token.json
           YOUTUBE_CHANNEL_ID=${{ secrets.YOUTUBE_CHANNEL_ID }}
           MONITORED_CHANNEL_IDS=${{ secrets.MONITORED_CHANNEL_IDS }}
           GOOGLE_DRIVE_FOLDER_ID=${{ secrets.GOOGLE_DRIVE_FOLDER_ID }}
-          GEMINI_API_KEY=${{ secrets.GEMINI_API_KEY }}
+          NVIDIA_API_KEY=${{ secrets.NVIDIA_API_KEY }}
           TELEGRAM_BOT_TOKEN=${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID=${{ secrets.TELEGRAM_CHAT_ID }}
           MAX_DAILY_UPLOADS=${{ secrets.MAX_DAILY_UPLOADS }}
-          UPLOAD_TIME_WINDOWS=${{ secrets.UPLOAD_TIME_WINDOWS }}
+          UPLOAD_TIME_WINDOWS=0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23
           FFMPEG_MIRROR=true
           FFMPEG_SPEED=1.05
           FFMPEG_CROP_PERCENT=3
           FFMPEG_BRIGHTNESS=0.02
           FFMPEG_CONTRAST=1.02
           FFMPEG_SATURATION=1.03
-          EOF
+          ENVEOF
 
       - name: Restore state
         run: |
@@ -65,6 +65,7 @@ jobs:
             cp state_backup.json data/state.json
             echo "State restored from backup"
           else
+            echo '{"processed_videos":{}, "daily_upload_count":0, "last_upload_date":null, "last_scan":null}' > data/state.json
             echo "No previous state found, starting fresh"
           fi
 

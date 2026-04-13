@@ -38,7 +38,12 @@ class TelegramReporter:
             True if message sent successfully
         """
         if not self.bot_token or not self.chat_id:
-            logger.warning("Telegram credentials not configured, skipping notification")
+            logger.warning(
+                f"Telegram credentials not configured "
+                f"(bot_token={'set' if self.bot_token else 'MISSING'}, "
+                f"chat_id={'set' if self.chat_id else 'MISSING'}), "
+                f"skipping notification"
+            )
             return False
 
         try:
@@ -47,13 +52,19 @@ class TelegramReporter:
                 "chat_id": self.chat_id,
                 "text": text,
                 "parse_mode": parse_mode,
+                "disable_web_page_preview": True,
             }
 
             response = requests.post(url, json=payload, timeout=30)
 
             if response.status_code == 200:
-                logger.debug("Telegram message sent successfully")
-                return True
+                result = response.json()
+                if result.get("ok"):
+                    logger.info(f"Telegram message sent successfully to chat_id {self.chat_id}")
+                    return True
+                else:
+                    logger.error(f"Telegram API returned error: {result}")
+                    return False
             else:
                 logger.error(
                     f"Telegram API error: {response.status_code} - {response.text}"

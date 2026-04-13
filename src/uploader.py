@@ -128,22 +128,29 @@ class YouTubeUploader:
     def is_upload_window(self) -> bool:
         """
         Check if current time is within an upload window.
+        If UPLOAD_TIME_WINDOWS is empty or contains 0-23 all hours, uploads anytime (24/7).
         
         Returns:
-            True if current hour matches an upload window
+            True if upload is allowed at current time
         """
         from datetime import timezone, timedelta
+
+        # If no windows configured or all hours covered, allow 24/7
+        windows = config.UPLOAD_TIME_WINDOWS
+        if not windows or set(windows) == set(range(24)):
+            logger.debug("Upload windows set to 24/7 mode - anytime upload allowed")
+            return True
 
         # IST offset
         ist = timezone(timedelta(hours=5, minutes=30))
         current_hour = datetime.now(ist).hour
 
-        if current_hour in config.UPLOAD_TIME_WINDOWS:
+        if current_hour in windows:
             return True
 
         logger.info(
             f"Current hour {current_hour} IST is not in upload windows "
-            f"{config.UPLOAD_TIME_WINDOWS}"
+            f"{windows}. Next window: will retry in next cycle."
         )
         return False
 

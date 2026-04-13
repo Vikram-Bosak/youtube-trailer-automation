@@ -5,6 +5,11 @@ Applies FFmpeg modifications for copyright protection:
 - Speed adjustment
 - Crop
 - Color adjustments (brightness, contrast, saturation)
+
+IMPORTANT: Speed adjustment SHORTENS the video duration.
+  - Speed 1.05x = video becomes ~5% shorter (2:00 → 1:54)
+  - This is EXPECTED behavior for copyright protection.
+  - The audio is also sped up to match, no content is "cut".
 """
 
 import logging
@@ -42,6 +47,11 @@ class VideoProcessor:
             return None
 
         try:
+            # Log original duration
+            original_duration = self.get_video_duration(input_path)
+            if original_duration:
+                logger.info(f"Original duration: {original_duration:.1f}s ({self._format_duration(original_duration)})")
+
             # Build the FFmpeg filter chain
             filters = self._build_filter_chain()
             
@@ -63,6 +73,20 @@ class VideoProcessor:
                 return None
 
             if output_path.exists():
+                # Log processed duration
+                processed_duration = self.get_video_duration(output_path)
+                if processed_duration and original_duration:
+                    diff = original_duration - processed_duration
+                    logger.info(
+                        f"Processed duration: {processed_duration:.1f}s ({self._format_duration(processed_duration)}) "
+                        f"[Original: {original_duration:.1f}s, Diff: {diff:.1f}s]"
+                    )
+                    if config.FFMPEG_SPEED > 1.0:
+                        expected = original_duration / config.FFMPEG_SPEED
+                        logger.info(
+                            f"Speed adjustment: {config.FFMPEG_SPEED}x → "
+                            f"Expected: {expected:.1f}s, Got: {processed_duration:.1f}s"
+                        )
                 logger.info(f"Processed video saved: {output_path}")
                 return output_path
             else:
@@ -75,6 +99,12 @@ class VideoProcessor:
         except Exception as e:
             logger.error(f"Error processing video: {e}")
             return None
+
+    def _format_duration(self, seconds: float) -> str:
+        """Format seconds to MM:SS."""
+        m = int(seconds) // 60
+        s = int(seconds) % 60
+        return f"{m}:{s:02d}"
 
     def _build_filter_chain(self) -> str:
         """
@@ -93,9 +123,6 @@ class VideoProcessor:
         # 2. Crop (percentage-based)
         if config.FFMPEG_CROP_PERCENT > 0:
             crop_pct = config.FFMPEG_CROP_PERCENT
-            # We'll use the crop filter with exact pixel values
-            # Using iw and ih variables for input width/height
-            # crop=iw*(1-2*crop_pct/100):ih*(1-2*crop_pct/100)
             scale = (100 - 2 * crop_pct) / 100
             filters.append(
                 f"crop=iw*{scale}:ih*{scale},pad=iw:ih:(ow-iw)/2:(oh-ih)/2:black"
@@ -103,14 +130,13 @@ class VideoProcessor:
             logger.debug(f"Added: crop {crop_pct}% from each side")
 
         # 3. Speed adjustment
+        # NOTE: Speed > 1.0 SHORTENS the video. This is normal.
+        # 1.05x speed = video is ~5% shorter but ALL content is preserved.
         if config.FFMPEG_SPEED != 1.0:
             speed = config.FFMPEG_SPEED
-            # setpts for video, atempo for audio
-            # atempo range is 0.5 to 2.0, chain for values outside
             video_speed = f"setpts={1/speed}*PTS"
-            audio_speed = self._build_atempo_filter(speed)
             filters.append(video_speed)
-            logger.debug(f"Added: speed x{speed}")
+            logger.debug(f"Added: speed x{speed} (video will be {1/speed:.2f}x original length)")
 
         # 4. Color adjustments
         color_filters = []
@@ -226,6 +252,3 @@ class VideoProcessor:
 if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO)
     processor = VideoProcessor()
-    # Test: process a video
-    # result = processor.process(Path("test.mp4"), "test_video")
-    # print(f"Result: {result}")

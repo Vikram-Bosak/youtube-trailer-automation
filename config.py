@@ -51,8 +51,8 @@ CHANNEL_NAMES = {
 # --- Google Drive ---
 GOOGLE_DRIVE_FOLDER_ID = os.getenv("GOOGLE_DRIVE_FOLDER_ID", "")
 
-# --- Gemini AI ---
-GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "")
+# --- NVIDIA AI (MiniMax via OpenAI-compatible API) ---
+NVIDIA_API_KEY=os.getenv("NVIDIA_API_KEY", "")
 
 # --- Telegram ---
 TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN", "")

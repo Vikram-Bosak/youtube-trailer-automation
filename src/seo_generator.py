@@ -1,13 +1,15 @@
 """
 SEO Content Generator Module
-Uses Google Gemini AI to generate optimized titles, descriptions, and tags
+Uses NVIDIA MiniMax AI (OpenAI-compatible API) to generate optimized titles, descriptions, and tags
 for re-uploaded trailer videos.
 """
 
+import json
 import logging
+import re
 from typing import Optional
 
-import google.generativeai as genai
+from openai import OpenAI
 
 import config
 
@@ -35,22 +37,25 @@ Respond with ONLY a JSON object in this exact format:
     "tags": ["tag1", "tag2", "tag3"]
 }"""
 
+# NVIDIA API Configuration
+NVIDIA_BASE_URL = "https://integrate.api.nvidia.com/v1"
+NVIDIA_MODEL = "minimaxai/minimax-m2.7"
+
 
 class SEOGenerator:
-    """Generates SEO-optimized YouTube metadata using Gemini AI."""
+    """Generates SEO-optimized YouTube metadata using NVIDIA MiniMax AI."""
 
     def __init__(self, api_key: Optional[str] = None):
-        self.api_key = api_key or config.GEMINI_API_KEY
+        self.api_key = api_key or config.NVIDIA_API_KEY
         if self.api_key:
-            genai.configure(api_key=self.api_key)
-            self.model = genai.GenerativeModel(
-                model_name="gemini-2.5-flash",
-                system_instruction=SEO_SYSTEM_PROMPT
+            self.client = OpenAI(
+                base_url=NVIDIA_BASE_URL,
+                api_key=self.api_key,
             )
-            logger.info("Gemini AI initialized for SEO generation")
+            logger.info("NVIDIA MiniMax AI initialized for SEO generation")
         else:
-            self.model = None
-            logger.warning("No Gemini API key provided, SEO generation will be limited")
+            self.client = None
+            logger.warning("No NVIDIA API key provided, SEO generation will be limited")
 
     def generate_seo_content(
         self,
@@ -71,37 +76,38 @@ class SEOGenerator:
         Returns:
             Dict with 'title', 'description', and 'tags'
         """
-        if not self.model:
-            logger.warning("Gemini not available, generating basic SEO content")
+        if not self.client:
+            logger.warning("NVIDIA MiniMax not available, generating basic SEO content")
             return self._generate_basic_seo(original_title)
 
         try:
-            prompt = f"""Generate YouTube SEO metadata for this trailer:
+            user_prompt = f"""Generate optimized metadata for this movie trailer re-upload.
 
 Original Title: {original_title}
 Source Channel: {channel_name}
 Original Description: {original_description[:500]}
 
-Create an optimized title, description, and tags for re-uploading this trailer.
-Make the title unique and catchy while keeping the movie name and trailer type.
-The description should be engaging and include relevant keywords and hashtags."""
+Create unique, SEO-optimized title (under 100 chars), engaging description (200-300 words with hashtags), and 15-20 relevant tags.
 
-            response = self.model.generate_content(
-                prompt,
-                generation_config=genai.types.GenerationConfig(
-                    temperature=0.8,
-                    max_output_tokens=1000,
-                )
+IMPORTANT: Respond with ONLY valid JSON in this exact format, no other text:
+{{"title": "Your SEO Title", "description": "Your description with #hashtags", "tags": ["tag1", "tag2"]}}"""
+
+            response = self.client.chat.completions.create(
+                model=NVIDIA_MODEL,
+                messages=[
+                    {"role": "system", "content": SEO_SYSTEM_PROMPT},
+                    {"role": "user", "content": user_prompt},
+                ],
+                temperature=0.8,
+                top_p=0.95,
+                max_tokens=1000,
             )
 
             # Parse the JSON response
-            import json
-            import re
-
-            text = response.text.strip()
+            text = response.choices[0].message.content.strip()
             
             # Try to extract JSON from the response
-            # Sometimes Gemini wraps it in markdown code blocks
+            # Sometimes AI wraps it in markdown code blocks
             json_match = re.search(r'```(?:json)?\s*([\s\S]*?)```', text)
             if json_match:
                 text = json_match.group(1).strip()
@@ -133,7 +139,7 @@ The description should be engaging and include relevant keywords and hashtags.""
     def _generate_basic_seo(self, original_title: str) -> dict:
         """
         Generate basic SEO content without AI.
-        Fallback when Gemini is unavailable.
+        Fallback when AI is unavailable.
         """
         # Clean up the title
         title = original_title
@@ -169,7 +175,6 @@ Watch the latest trailer! Don't forget to LIKE, SHARE and SUBSCRIBE for more ama
 
     def _extract_movie_name(self, title: str) -> str:
         """Extract movie name from trailer title."""
-        import re
         # Remove common trailer suffixes
         name = re.sub(
             r'\s*(official\s+)?(trailer|teaser|preview|first\s+look)\s*(\d+)?$',
