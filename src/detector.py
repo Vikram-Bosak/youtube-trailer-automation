@@ -15,18 +15,19 @@ import config
 
 logger = logging.getLogger(__name__)
 
-# Keywords to identify trailers
-TRAILER_KEYWORDS = [
-    "trailer", "official trailer", "teaser", "teaser trailer",
-    "first look", "preview", "official preview",
-    "official video", "official", "in theaters", "coming soon",
-    "tickets on sale", "in cinemas", "only in theaters",
-    "only in cinemas", "in theaters and imax", "watch the",
-    "get your tickets", "now playing", "this summer",
-    "this friday", "soon", "new look", "sneak peek"
+# STRICT: Title MUST contain one of these words to be considered a trailer
+# If title does NOT have "trailer" or "teaser" → it's NOT a trailer
+REQUIRED_TITLE_KEYWORDS = [
+    "trailer", "teaser"
 ]
 
-# Keywords to exclude (these are NOT trailers)
+# Additional keywords that SUPPORT trailer identification (only checked if REQUIRED keyword found)
+SUPPORTING_KEYWORDS = [
+    "official", "first look", "preview", "sneak peek"
+]
+
+# Keywords that EXCLUDE a video even if it has "trailer" in title
+# NOTE: Use multi-word phrases for specificity to avoid false matches
 EXCLUDE_KEYWORDS = [
     "reaction", "review", "breakdown", "analysis", "explained",
     "fan made", "fan-made", "concept", "recap", "summary",
@@ -34,7 +35,12 @@ EXCLUDE_KEYWORDS = [
     "bts", "making of", "interview", "featurette",
     "vlog", "podcast", "livestream", "live stream",
     "tutorial", "how to", "top 10", "ranking",
-    "viralshorts", "shorts", "viral"
+    "viralshorts", "shorts", "viral",
+    "clip compilation", "best moments", "funny moments",
+    "deleted scene", "alternate scene", "extended scene",
+    "opening scene", "ending scene", "fight scene",
+    "movie clip", "film clip", "video clip",
+    "clip from", "scene from"
 ]
 
 # Channels where ALL new videos are treated as trailers (official studio channels)
@@ -256,41 +262,42 @@ class TrailerDetector:
 
     def is_trailer(self, video_info: dict) -> bool:
         """
-        Check if a video is a trailer based on title, description, and channel.
+        Check if a video is a trailer based on title keywords.
+        
+        STRICT RULE: Title MUST contain "trailer" or "teaser" to be accepted.
+        No clips, no scenes, no movie moments - ONLY trailers!
         
         Args:
             video_info: Video information dict
             
         Returns:
-            True if the video appears to be a trailer
+            True if the video is a genuine trailer
         """
         title = video_info.get("title", "").lower()
         description = video_info.get("description", "").lower()
-        channel_id = video_info.get("channel_id", "")
         combined = f"{title} {description}"
 
-        # Check for exclusion keywords FIRST - these are definitely NOT trailers
+        # STEP 1: Check for exclusion keywords FIRST
+        # Even if title has "trailer", these words mean it's NOT a real trailer
         has_exclude_keyword = any(
             kw in combined for kw in EXCLUDE_KEYWORDS
         )
         if has_exclude_keyword:
+            logger.info(f"SKIP (excluded keyword): {title}")
             return False
 
-        # If this is an official studio channel, treat ALL videos as trailers
-        # (Studio channels only post promotional content)
-        if channel_id in AUTO_TRAILER_CHANNELS:
-            logger.debug(f"Auto-accepting from studio channel: {title}")
-            return True
-
-        # Check for trailer keywords
-        has_trailer_keyword = any(
-            kw in combined for kw in TRAILER_KEYWORDS
+        # STEP 2: STRICT CHECK - Title MUST contain "trailer" or "teaser"
+        # This is the main filter - no trailer/teaser in title = NOT a trailer
+        has_required_keyword = any(
+            kw in title for kw in REQUIRED_TITLE_KEYWORDS
         )
+        if not has_required_keyword:
+            logger.info(f"SKIP (no trailer/teaser in title): {title}")
+            return False
 
-        # Video duration check - trailers are typically 1-5 minutes
-        # This will be refined after download when we know actual duration
-        
-        return has_trailer_keyword
+        # If we got here, title has "trailer" or "teaser" and no exclusion words
+        logger.info(f"ACCEPTED as trailer: {title}")
+        return True
 
     def find_reuploaders(self, video_info: dict, max_results: int = 5) -> List[dict]:
         """
