@@ -59,20 +59,20 @@ TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN", "")
 TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID", "")
 
 # --- Upload Settings ---
-MAX_DAILY_UPLOADS = int(os.getenv("MAX_DAILY_UPLOADS", "5"))
+MAX_DAILY_UPLOADS = int(os.getenv("MAX_DAILY_UPLOADS") or "5")
 UPLOAD_TIME_WINDOWS = [
     int(w.strip())
-    for w in os.getenv("UPLOAD_TIME_WINDOWS", "9,12,15,18,21").split(",")
+    for w in (os.getenv("UPLOAD_TIME_WINDOWS") or "9,12,15,18,21").split(",")
     if w.strip()
 ]
 
 # --- FFmpeg Settings ---
 FFMPEG_MIRROR = os.getenv("FFMPEG_MIRROR", "true").lower() == "true"
-FFMPEG_SPEED = float(os.getenv("FFMPEG_SPEED", "1.05"))
-FFMPEG_CROP_PERCENT = int(os.getenv("FFMPEG_CROP_PERCENT", "3"))
-FFMPEG_BRIGHTNESS = float(os.getenv("FFMPEG_BRIGHTNESS", "0.02"))
-FFMPEG_CONTRAST = float(os.getenv("FFMPEG_CONTRAST", "1.02"))
-FFMPEG_SATURATION = float(os.getenv("FFMPEG_SATURATION", "1.03"))
+FFMPEG_SPEED = float(os.getenv("FFMPEG_SPEED") or "1.05")
+FFMPEG_CROP_PERCENT = int(os.getenv("FFMPEG_CROP_PERCENT") or "3")
+FFMPEG_BRIGHTNESS = float(os.getenv("FFMPEG_BRIGHTNESS") or "0.02")
+FFMPEG_CONTRAST = float(os.getenv("FFMPEG_CONTRAST") or "1.02")
+FFMPEG_SATURATION = float(os.getenv("FFMPEG_SATURATION") or "1.03")
 
 # --- YouTube API Scopes ---
 YOUTUBE_SCOPES = ["https://www.googleapis.com/auth/youtube.upload"]
