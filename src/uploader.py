@@ -183,6 +183,23 @@ class YouTubeUploader:
             logger.error(f"Video file not found: {video_path}")
             return None
 
+        # SAFETY CHECK: Never upload Shorts (under 60s)
+        # Check video duration from file
+        try:
+            import subprocess
+            probe = subprocess.run(
+                ["ffprobe", "-v", "error", "-show_entries", "format=duration",
+                 "-of", "default=noprint_wrappers=1:nokey=1", str(video_path)],
+                capture_output=True, text=True, timeout=10
+            )
+            duration_sec = float(probe.stdout.strip()) if probe.stdout.strip() else 0
+            if duration_sec < 60:
+                logger.error(f"BLOCKED: Video is too short ({duration_sec:.0f}s) - this is a Short, NOT uploading!")
+                return None
+            logger.info(f"Video duration: {duration_sec:.0f}s - OK (long video)")
+        except Exception as e:
+            logger.warning(f"Could not check video duration: {e} - proceeding with upload")
+
         try:
             # Prepare upload
             body = {

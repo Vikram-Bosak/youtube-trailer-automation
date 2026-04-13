@@ -18,16 +18,27 @@ logger = logging.getLogger(__name__)
 # Keywords to identify trailers
 TRAILER_KEYWORDS = [
     "trailer", "official trailer", "teaser", "teaser trailer",
-    "first look", "preview", "official preview"
+    "first look", "preview", "official preview",
+    "official video", "official", "in theaters", "coming soon",
+    "tickets on sale", "in cinemas", "only in theaters",
+    "only in cinemas", "in theaters and imax", "watch the",
+    "get your tickets", "now playing", "this summer",
+    "this friday", "soon", "new look", "sneak peek"
 ]
 
-# Keywords to exclude
+# Keywords to exclude (these are NOT trailers)
 EXCLUDE_KEYWORDS = [
     "reaction", "review", "breakdown", "analysis", "explained",
     "fan made", "fan-made", "concept", "recap", "summary",
     "full movie", "full episode", "gameplay", "behind the scenes",
-    "bts", "making of", "interview", "clip", "scene", "featurette"
+    "bts", "making of", "interview", "featurette",
+    "vlog", "podcast", "livestream", "live stream",
+    "tutorial", "how to", "top 10", "ranking",
+    "viralshorts", "shorts", "viral"
 ]
+
+# Channels where ALL new videos are treated as trailers (official studio channels)
+AUTO_TRAILER_CHANNELS = set()  # Will be populated from config
 
 
 class TrailerDetector:
@@ -47,7 +58,13 @@ class TrailerDetector:
                 self.youtube = build("youtube", "v3", developerKey=self.api_key)
                 logger.info("YouTube Data API client initialized")
             except Exception as e:
-                logger.warning(f"Failed to init YouTube API client: {e}")
+                logger.error(f"Failed to initialize YouTube API client: {e}")
+
+        # All monitored channels are treated as official studio channels
+        # So ALL their new videos are treated as trailers/promos
+        global AUTO_TRAILER_CHANNELS
+        AUTO_TRAILER_CHANNELS = set(config.MONITORED_CHANNEL_IDS)
+        logger.info(f"Auto-trailer channels: {len(AUTO_TRAILER_CHANNELS)} channels")
 
     def get_channel_uploads_playlist(self, channel_id: str) -> Optional[str]:
         """Get the uploads playlist ID for a channel."""
@@ -65,16 +82,63 @@ class TrailerDetector:
             logger.error(f"Error getting uploads playlist for {channel_id}: {e}")
         return None
 
+    def _get_video_durations(self, video_ids: List[str]) -> dict:
+        """
+        Get duration for multiple videos using YouTube Data API.
+        Returns dict mapping video_id -> duration_str (e.g. 'PT2M30S')
+        """
+        if not self.youtube or not video_ids:
+            return {}
+        durations = {}
+        try:
+            # Process in batches of 50 (API limit)
+            for i in range(0, len(video_ids), 50):
+                batch = video_ids[i:i+50]
+                request = self.youtube.videos().list(
+                    part="contentDetails",
+                    id=",".join(batch)
+                )
+                response = request.execute()
+                for item in response.get("items", []):
+                    vid_id = item["id"]
+                    duration = item.get("contentDetails", {}).get("duration", "")
+                    durations[vid_id] = duration
+        except HttpError as e:
+            logger.error(f"Error fetching video durations: {e}")
+        return durations
+
+    def _parse_duration(self, duration_str: str) -> int:
+        """
+        Parse ISO 8601 duration (PT2M30S) to seconds.
+        """
+        import re
+        if not duration_str:
+            return 0
+        match = re.match(r'PT(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?', duration_str)
+        if not match:
+            return 0
+        hours = int(match.group(1) or 0)
+        minutes = int(match.group(2) or 0)
+        seconds = int(match.group(3) or 0)
+        return hours * 3600 + minutes * 60 + seconds
+
+    def _is_short(self, duration_str: str) -> bool:
+        """
+        Check if a video is a YouTube Short (under 60 seconds).
+        """
+        return self._parse_duration(duration_str) < 60
+
     def get_latest_videos_api(self, channel_id: str, hours: int = 24) -> List[dict]:
         """
         Get latest videos from a channel using YouTube Data API.
+        Filters out YouTube Shorts (videos under 60 seconds).
         
         Args:
             channel_id: YouTube channel ID
             hours: Look back period in hours
             
         Returns:
-            List of video info dicts
+            List of video info dicts (LONG videos only, no Shorts)
         """
         if not self.youtube:
             logger.warning("YouTube API client not available, using RSS fallback")
@@ -96,6 +160,8 @@ class TrailerDetector:
             )
             response = request.execute()
 
+            # Collect all videos first
+            raw_videos = []
             for item in response.get("items", []):
                 snippet = item["snippet"]
                 published_at = datetime.strptime(
@@ -108,13 +174,34 @@ class TrailerDetector:
                 video_info = {
                     "video_id": snippet["resourceId"]["videoId"],
                     "title": snippet["title"],
+                    "channel_id": channel_id,
                     "channel_title": snippet["channelTitle"],
                     "published_at": snippet["publishedAt"],
                     "description": snippet.get("description", ""),
                     "thumbnail": snippet["thumbnails"].get("high", {}).get("url", ""),
                     "url": f"https://www.youtube.com/watch?v={snippet['resourceId']['videoId']}"
                 }
-                videos.append(video_info)
+                raw_videos.append(video_info)
+
+            # Filter out Shorts - get durations for all videos
+            if raw_videos:
+                video_ids = [v["video_id"] for v in raw_videos]
+                durations = self._get_video_durations(video_ids)
+
+                for video in raw_videos:
+                    vid_id = video["video_id"]
+                    duration_str = durations.get(vid_id, "")
+
+                    if self._is_short(duration_str):
+                        duration_sec = self._parse_duration(duration_str)
+                        logger.info(f"SKIP SHORT: {video['title']} ({duration_sec}s)")
+                        continue
+
+                    # Store duration info
+                    video["duration"] = duration_str
+                    video["duration_seconds"] = self._parse_duration(duration_str)
+                    videos.append(video)
+                    logger.debug(f"LONG VIDEO: {video['title']} ({video['duration_seconds']}s)")
 
         except HttpError as e:
             logger.error(f"Error fetching videos from {channel_id}: {e}")
@@ -153,6 +240,7 @@ class TrailerDetector:
                 video_info = {
                     "video_id": video_id,
                     "title": entry.title,
+                    "channel_id": channel_id,
                     "channel_title": entry.author if hasattr(entry, 'author') else "",
                     "published_at": entry.published,
                     "description": entry.summary if hasattr(entry, 'summary') else "",
@@ -168,7 +256,7 @@ class TrailerDetector:
 
     def is_trailer(self, video_info: dict) -> bool:
         """
-        Check if a video is a trailer based on title and description.
+        Check if a video is a trailer based on title, description, and channel.
         
         Args:
             video_info: Video information dict
@@ -178,22 +266,31 @@ class TrailerDetector:
         """
         title = video_info.get("title", "").lower()
         description = video_info.get("description", "").lower()
+        channel_id = video_info.get("channel_id", "")
         combined = f"{title} {description}"
+
+        # Check for exclusion keywords FIRST - these are definitely NOT trailers
+        has_exclude_keyword = any(
+            kw in combined for kw in EXCLUDE_KEYWORDS
+        )
+        if has_exclude_keyword:
+            return False
+
+        # If this is an official studio channel, treat ALL videos as trailers
+        # (Studio channels only post promotional content)
+        if channel_id in AUTO_TRAILER_CHANNELS:
+            logger.debug(f"Auto-accepting from studio channel: {title}")
+            return True
 
         # Check for trailer keywords
         has_trailer_keyword = any(
             kw in combined for kw in TRAILER_KEYWORDS
         )
 
-        # Check for exclusion keywords
-        has_exclude_keyword = any(
-            kw in combined for kw in EXCLUDE_KEYWORDS
-        )
-
         # Video duration check - trailers are typically 1-5 minutes
         # This will be refined after download when we know actual duration
         
-        return has_trailer_keyword and not has_exclude_keyword
+        return has_trailer_keyword
 
     def find_reuploaders(self, video_info: dict, max_results: int = 5) -> List[dict]:
         """

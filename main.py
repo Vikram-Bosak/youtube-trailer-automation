@@ -209,7 +209,7 @@ class TrailerAutomation:
 
         # Detect new trailers
         new_trailers = self.detector.detect_new_trailers(
-            hours=24,
+            hours=48,
             processed_ids=processed_ids,
         )
 
