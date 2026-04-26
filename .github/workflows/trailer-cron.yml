@@ -86,14 +86,22 @@ jobs:
           GOOGLE_OAUTH_TOKEN: ${{ secrets.GOOGLE_OAUTH_TOKEN }}
         run: |
           # Write client_secrets.json from environment variable
-          echo "$GOOGLE_CLIENT_SECRETS" > client_secrets.json
+          cat > client_secrets.json << 'EOF'
+          $GOOGLE_CLIENT_SECRETS
+          EOF
           
           # Write oauth_token.json from environment variable
-          echo "$GOOGLE_OAUTH_TOKEN" > oauth_token.json
+          cat > oauth_token.json << 'EOF'
+          $GOOGLE_OAUTH_TOKEN
+          EOF
           
           # Verify files were created
           echo "client_secrets.json size: $(wc -c < client_secrets.json)"
           echo "oauth_token.json size: $(wc -c < oauth_token.json)"
+          
+          # Verify JSON is valid
+          python -c "import json; json.load(open('client_secrets.json'))" && echo "client_secrets.json is valid JSON"
+          python -c "import json; json.load(open('oauth_token.json'))" && echo "oauth_token.json is valid JSON"
 
       - name: Run trailer automation
         run: |
