@@ -98,6 +98,23 @@ class VideoDownloader:
             # Quiet mode
             "quiet": False,
             "no_color": True,
+            
+            # Bypass YouTube bot detection - use Android client
+            "extractor_args": {
+                "youtube": {
+                    "player_client": ["android", "ios", "web"],
+                    "player_skip": ["configs", "js", "webpage"],
+                }
+            },
+            
+            # Additional headers to avoid blocking
+            "http_headers": {
+                "User-Agent": "com.google.android.youtube/19.09.37 (Linux; U; Android 12) gzip",
+                "Accept": "*/*",
+                "Accept-Language": "en-US,en;q=0.9",
+                "Accept-Encoding": "gzip, deflate",
+                "Connection": "keep-alive",
+            },
         }
 
         # Remove None options
@@ -201,6 +218,20 @@ class VideoDownloader:
             "quiet": True,
             "no_warnings": True,
             "cookiefile": self._find_cookie_file(),
+            # Bypass YouTube bot detection
+            "extractor_args": {
+                "youtube": {
+                    "player_client": ["android", "ios", "web"],
+                    "player_skip": ["configs", "js", "webpage"],
+                }
+            },
+            "http_headers": {
+                "User-Agent": "com.google.android.youtube/19.09.37 (Linux; U; Android 12) gzip",
+                "Accept": "*/*",
+                "Accept-Language": "en-US,en;q=0.9",
+                "Accept-Encoding": "gzip, deflate",
+                "Connection": "keep-alive",
+            },
         }
         ydl_opts = {k: v for k, v in ydl_opts.items() if v is not None}
 
