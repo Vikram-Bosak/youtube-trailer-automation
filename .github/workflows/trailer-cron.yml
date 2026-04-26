@@ -11,7 +11,7 @@ jobs:
   detect-and-upload:
     runs-on: ubuntu-latest
     timeout-minutes: 30
-    
+
     permissions:
       contents: write
 
@@ -46,11 +46,11 @@ jobs:
       - name: Create .env file
         run: |
           cat > .env << 'ENVEOF'
-          GOOGLE_CLIENT_SECRETS_FILE=client_secrets.json
-          GOOGLE_OAUTH_TOKEN_FILE=oauth_token.json
+          GOOGLE_CLIENT_SECRETS_FILE=client...json
+          GOOGLE_OAUTH_TOKEN_FILE=***
           YOUTUBE_CHANNEL_ID=${{ secrets.YOUTUBE_CHANNEL_ID }}
           YOUTUBE_API_KEY=${{ secrets.YOUTUBE_API_KEY }}
-          MONITORED_CHANNEL_IDS=${{ secrets.MONITORED_CHANNEL_IDS }}
+          MONITORED_CHANNEL_IDS=UCxwitsUVNzwS5XBSC5UQV8Q,UCjmJDM5pRKbUlVIzDYYWb6g,UCq7OHvWO6Z3u-LztFdrcU-g,UCP8AC-LXl5Jmp64IRIsdacg,UCF9imwPMSGz4Vq1NiTWCC7g,UCi_MYg8bBEbfIHfLRxGd_Eg,UCjxbNJToHJDC18bdIV7Q9Sg,UCFR6sruqEq52xEqjE84tq4A,UCU4SM3j_9TNWaSu8KdGV50g,UCor9rW6PgxSQ9vUPWQdnaYQ,UC6x8GQ0xvFJvLX3MlDARmQQ,UC8R8FRt1m1p1p1p1p1p1p1p,UCp7R3-8f2dW6xJZ5Z8Z9Z0Q,UCWOA1ZGywLbqigc6UjP4_hg,UCia2_wzvSZrQBzbopXT1Fcg,UC_IRYSp4auq7hKLvziWVH6w,UCy2Tb3StbfsCrIEVMDsPkbw,UCf8IdVIbA45W29Xumi9SSTA,UCz97F7dMxBNOfGYu3rx8aCw,UCPEQSSaBSXq7hmh2LY2HuWg,UCf5CjDJvsFvtVIhkfmKAwAA
           GOOGLE_DRIVE_FOLDER_ID=${{ secrets.GOOGLE_DRIVE_FOLDER_ID }}
           NVIDIA_API_KEY=${{ secrets.NVIDIA_API_KEY }}
           TELEGRAM_BOT_TOKEN=${{ secrets.TELEGRAM_BOT_TOKEN }}
@@ -80,7 +80,7 @@ jobs:
         run: |
           # Write client_secrets.json from secrets
           echo '${{ secrets.GOOGLE_CLIENT_SECRETS }}' > client_secrets.json
-          # Write oauth_token.json from secrets  
+          # Write oauth_token.json from secrets
           echo '${{ secrets.GOOGLE_OAUTH_TOKEN }}' > oauth_token.json
 
       - name: Run trailer automation
