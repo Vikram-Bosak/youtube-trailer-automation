@@ -82,10 +82,13 @@ jobs:
 
       - name: Write credentials
         run: |
-          # Write client_secrets.json from secrets
-          echo '${{ secrets.GOOGLE_CLIENT_SECRETS }}' > client_secrets.json
-          # Write oauth_token.json from secrets
-          echo '${{ secrets.GOOGLE_OAUTH_TOKEN }}' > oauth_token.json
+          # Write client_secrets.json from secrets (properly quoted)
+          echo "${{ secrets.GOOGLE_CLIENT_SECRETS }}" > client_secrets.json
+          # Write oauth_token.json from secrets (properly quoted)
+          echo "${{ secrets.GOOGLE_OAUTH_TOKEN }}" > oauth_token.json
+          # Verify files were created
+          echo "client_secrets.json size: $(wc -c < client_secrets.json)"
+          echo "oauth_token.json size: $(wc -c < oauth_token.json)"
 
       - name: Run trailer automation
         run: |
