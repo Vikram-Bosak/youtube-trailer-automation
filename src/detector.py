@@ -275,8 +275,8 @@ class TrailerDetector:
         """
         Check if a video is a trailer based on title keywords.
         
-        STRICT RULE: Title MUST contain "trailer" or "teaser" to be accepted.
-        No clips, no scenes, no movie moments - ONLY trailers!
+        For AUTO_TRAILER_CHANNELS (official studio channels), ALL videos are treated as trailers.
+        For other channels, title MUST contain "trailer" or "teaser".
         
         Args:
             video_info: Video information dict
@@ -287,6 +287,7 @@ class TrailerDetector:
         title = video_info.get("title", "").lower()
         description = video_info.get("description", "").lower()
         combined = f"{title} {description}"
+        channel_id = video_info.get("channel_id", "")
 
         # STEP 1: Check for exclusion keywords FIRST
         # Even if title has "trailer", these words mean it's NOT a real trailer
@@ -297,7 +298,14 @@ class TrailerDetector:
             logger.info(f"SKIP (excluded keyword): {title}")
             return False
 
-        # STEP 2: STRICT CHECK - Title MUST contain "trailer" or "teaser"
+        # STEP 2: Check if this is an auto-trailer channel (official studio)
+        # For these channels, ALL videos are treated as trailers
+        is_auto_trailer = channel_id in AUTO_TRAILER_CHANNELS
+        if is_auto_trailer:
+            logger.info(f"ACCEPTED (auto-trailer channel): {title}")
+            return True
+
+        # STEP 3: STRICT CHECK - Title MUST contain "trailer" or "teaser"
         # This is the main filter - no trailer/teaser in title = NOT a trailer
         has_required_keyword = any(
             kw in title for kw in REQUIRED_TITLE_KEYWORDS
