@@ -15,6 +15,20 @@ import config
 
 logger = logging.getLogger(__name__)
 
+# List of public Invidious instances to use as fallback
+INVIDIOUS_INSTANCES = [
+    "https://yewtu.be",
+    "https://vid.puffyan.us",
+    "https://invidious.snopyta.org",
+    "https://invidious.kavin.rocks",
+    "https://inv.riverside.rocks",
+    "https://invidious.osi.kr",
+    "https://yewtu.be",
+    "https://invidious.fdn.fr",
+    "https://invidious.nerdvpn.de",
+    "https://inv.bp.projectsegfau.lt",
+]
+
 
 class VideoDownloader:
     """Downloads YouTube videos using yt-dlp with enhanced error handling."""
@@ -53,6 +67,35 @@ class VideoDownloader:
         """
         output_template = str(self.download_dir / f"{video_id}.%(ext)s")
 
+        # Try direct YouTube download first
+        result = self._download_with_options(video_url, video_id, output_template, use_invidious=False)
+        
+        # If direct download fails, try Invidious instances
+        if result is None:
+            logger.warning("Direct YouTube download failed, trying Invidious instances...")
+            for instance in INVIDIOUS_INSTANCES:
+                invidious_url = f"{instance}/watch?v={video_id}"
+                logger.info(f"Trying Invidious instance: {instance}")
+                result = self._download_with_options(invidious_url, video_id, output_template, use_invidious=True)
+                if result:
+                    logger.info(f"✅ Successfully downloaded via Invidious: {instance}")
+                    break
+        
+        return result
+
+    def _download_with_options(self, video_url: str, video_id: str, output_template: str, use_invidious: bool = False) -> Optional[Path]:
+        """
+        Download video with specific options.
+        
+        Args:
+            video_url: Video URL (YouTube or Invidious)
+            video_id: YouTube video ID
+            output_template: Output file template
+            use_invidious: Whether using Invidious instance
+            
+        Returns:
+            Path to downloaded file, or None if failed
+        """
         # Enhanced yt-dlp options
         ydl_opts = {
             # Format selection with fallbacks
@@ -98,24 +141,27 @@ class VideoDownloader:
             # Quiet mode
             "quiet": False,
             "no_color": True,
-            
-            # Bypass YouTube bot detection - use Android client
-            "extractor_args": {
-                "youtube": {
-                    "player_client": ["android", "ios", "web"],
-                    "player_skip": ["configs", "js", "webpage"],
-                }
-            },
-            
-            # Additional headers to avoid blocking
-            "http_headers": {
-                "User-Agent": "com.google.android.youtube/19.09.37 (Linux; U; Android 12) gzip",
-                "Accept": "*/*",
-                "Accept-Language": "en-US,en;q=0.9",
-                "Accept-Encoding": "gzip, deflate",
-                "Connection": "keep-alive",
-            },
         }
+
+        # Only add YouTube-specific options if not using Invidious
+        if not use_invidious:
+            ydl_opts.update({
+                # Bypass YouTube bot detection - use Android client
+                "extractor_args": {
+                    "youtube": {
+                        "player_client": ["android", "ios", "web"],
+                        "player_skip": ["configs", "js", "webpage"],
+                    }
+                },
+                # Additional headers to avoid blocking
+                "http_headers": {
+                    "User-Agent": "com.google.android.youtube/19.09.37 (Linux; U; Android 12) gzip",
+                    "Accept": "*/*",
+                    "Accept-Language": "en-US,en;q=0.9",
+                    "Accept-Encoding": "gzip, deflate",
+                    "Connection": "keep-alive",
+                },
+            })
 
         # Remove None options
         ydl_opts = {k: v for k, v in ydl_opts.items() if v is not None}
