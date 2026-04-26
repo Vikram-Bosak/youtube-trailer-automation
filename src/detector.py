@@ -82,10 +82,21 @@ class TrailerDetector:
                 id=channel_id
             )
             response = request.execute()
-            if response["items"]:
-                return response["items"][0]["contentDetails"]["relatedPlaylists"]["uploads"]
+            # Check if response is valid and has items
+            if not isinstance(response, dict):
+                logger.error(f"Invalid response type for {channel_id}: {type(response)}")
+                return None
+            if "items" not in response:
+                logger.error(f"No 'items' in response for {channel_id}. Response: {response}")
+                return None
+            if not response["items"]:
+                logger.warning(f"Empty items list for {channel_id}")
+                return None
+            return response["items"][0]["contentDetails"]["relatedPlaylists"]["uploads"]
         except HttpError as e:
             logger.error(f"Error getting uploads playlist for {channel_id}: {e}")
+        except (KeyError, IndexError) as e:
+            logger.error(f"Error parsing response for {channel_id}: {e}")
         return None
 
     def _get_video_durations(self, video_ids: List[str]) -> dict:
