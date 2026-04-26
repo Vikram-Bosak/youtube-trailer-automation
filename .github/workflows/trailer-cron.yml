@@ -82,25 +82,15 @@ jobs:
 
       - name: Write credentials
         run: |
-          # Write client_secrets.json from secrets using heredoc
-          cat > client_secrets.json << 'EOF'
-          ${{ secrets.GOOGLE_CLIENT_SECRETS }}
-          EOF
+          # Write client_secrets.json from secrets using printf
+          printf '%s' "${{ secrets.GOOGLE_CLIENT_SECRETS }}" > client_secrets.json
           
-          # Write oauth_token.json from secrets using heredoc
-          cat > oauth_token.json << 'EOF'
-          ${{ secrets.GOOGLE_OAUTH_TOKEN }}
-          EOF
+          # Write oauth_token.json from secrets using printf
+          printf '%s' "${{ secrets.GOOGLE_OAUTH_TOKEN }}" > oauth_token.json
           
           # Verify files were created
           echo "client_secrets.json size: $(wc -c < client_secrets.json)"
           echo "oauth_token.json size: $(wc -c < oauth_token.json)"
-          echo "client_secrets.json first 100 chars:"
-          head -c 100 client_secrets.json
-          echo ""
-          echo "oauth_token.json first 100 chars:"
-          head -c 100 oauth_token.json
-          echo ""
 
       - name: Run trailer automation
         run: |
