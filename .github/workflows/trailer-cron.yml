@@ -98,9 +98,7 @@ jobs:
           
           # Write cookies.txt from environment variable (if provided)
           if [ -n "$YOUTUBE_COOKIES" ]; then
-            cat > cookies.txt << EOF
-            $YOUTUBE_COOKIES
-            EOF
+            echo "$YOUTUBE_COOKIES" > cookies.txt
             echo "cookies.txt created ($(wc -c < cookies.txt) bytes)"
           else
             echo "No YOUTUBE_COOKIES secret provided - downloads may fail due to bot detection"
