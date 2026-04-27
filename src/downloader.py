@@ -1,6 +1,6 @@
 """
-Downloader Module - Enhanced Version
-Downloads YouTube videos using yt-dlp with better error handling and logging.
+Downloader Module - Enhanced Version with Multiple Download Strategies
+Downloads YouTube videos using yt-dlp with aggressive bypass options.
 """
 
 import logging
@@ -23,7 +23,6 @@ INVIDIOUS_INSTANCES = [
     "https://invidious.kavin.rocks",
     "https://inv.riverside.rocks",
     "https://invidious.osi.kr",
-    "https://yewtu.be",
     "https://invidious.fdn.fr",
     "https://invidious.nerdvpn.de",
     "https://inv.bp.projectsegfau.lt",
@@ -31,7 +30,7 @@ INVIDIOUS_INSTANCES = [
 
 
 class VideoDownloader:
-    """Downloads YouTube videos using yt-dlp with enhanced error handling."""
+    """Downloads YouTube videos using yt-dlp with multiple strategies."""
 
     def __init__(self, download_dir: Optional[Path] = None):
         self.download_dir = download_dir or config.DOWNLOAD_DIR
@@ -56,7 +55,7 @@ class VideoDownloader:
 
     def download(self, video_url: str, video_id: str) -> Optional[Path]:
         """
-        Download a YouTube video with enhanced error handling.
+        Download a YouTube video with multiple strategies.
         
         Args:
             video_url: Full YouTube video URL
@@ -67,138 +66,212 @@ class VideoDownloader:
         """
         output_template = str(self.download_dir / f"{video_id}.%(ext)s")
 
-        # Try direct YouTube download first
-        result = self._download_with_options(video_url, video_id, output_template, use_invidious=False)
-        
-        # If direct download fails, try Invidious instances
-        if result is None:
-            logger.warning("Direct YouTube download failed, trying Invidious instances...")
-            for instance in INVIDIOUS_INSTANCES:
-                invidious_url = f"{instance}/watch?v={video_id}"
-                logger.info(f"Trying Invidious instance: {instance}")
-                result = self._download_with_options(invidious_url, video_id, output_template, use_invidious=True)
-                if result:
-                    logger.info(f"✅ Successfully downloaded via Invidious: {instance}")
-                    break
-        
-        return result
+        # Strategy 1: Try Android client (most likely to work)
+        logger.info("🎯 Strategy 1: Trying Android client...")
+        result = self._download_with_android_client(video_url, video_id, output_template)
+        if result:
+            return result
 
-    def _download_with_options(self, video_url: str, video_id: str, output_template: str, use_invidious: bool = False) -> Optional[Path]:
-        """
-        Download video with specific options.
-        
-        Args:
-            video_url: Video URL (YouTube or Invidious)
-            video_id: YouTube video ID
-            output_template: Output file template
-            use_invidious: Whether using Invidious instance
-            
-        Returns:
-            Path to downloaded file, or None if failed
-        """
-        # Enhanced yt-dlp options
+        # Strategy 2: Try iOS client
+        logger.info("🎯 Strategy 2: Trying iOS client...")
+        result = self._download_with_ios_client(video_url, video_id, output_template)
+        if result:
+            return result
+
+        # Strategy 3: Try Web client with cookies
+        logger.info("🎯 Strategy 3: Trying Web client with cookies...")
+        result = self._download_with_web_client(video_url, video_id, output_template)
+        if result:
+            return result
+
+        # Strategy 4: Try Invidious instances
+        logger.info("🎯 Strategy 4: Trying Invidious instances...")
+        for instance in INVIDIOUS_INSTANCES:
+            invidious_url = f"{instance}/watch?v={video_id}"
+            logger.info(f"Trying Invidious instance: {instance}")
+            result = self._download_with_invidious(invidious_url, video_id, output_template)
+            if result:
+                logger.info(f"✅ Successfully downloaded via Invidious: {instance}")
+                return result
+
+        # Strategy 5: Try subprocess with aggressive options
+        logger.info("🎯 Strategy 5: Trying subprocess with aggressive options...")
+        result = self._download_with_subprocess(video_url, video_id, output_template)
+        if result:
+            return result
+
+        logger.error(f"❌ All download strategies failed for {video_id}")
+        return None
+
+    def _download_with_android_client(self, video_url: str, video_id: str, output_template: str) -> Optional[Path]:
+        """Download using Android client (bypasses most restrictions)."""
         ydl_opts = {
-            # More permissive format selection - try any available format
-            "format": "best[ext=mp4]/bestvideo+bestaudio/best",
+            "format": "best[ext=mp4]/best",
             "outtmpl": output_template,
             "merge_output_format": "mp4",
-            
-            # Post-processors
-            "postprocessors": [
-                {
-                    "key": "FFmpegVideoConvertor",
-                    "preferedformat": "mp4",
+            "extractor_args": {
+                "youtube": {
+                    "player_client": ["android"],
+                    "player_skip": ["configs", "js", "webpage"],
                 }
-            ],
-            
-            # Progress hooks
-            "progress_hooks": [self._progress_hook],
-            
-            # Retry logic
-            "retries": 5,
-            "fragment_retries": 10,
-            "file_access_retries": 5,
-            
-            # Timeout settings
-            "socket_timeout": 60,
-            
-            # Skip errors
+            },
+            "http_headers": {
+                "User-Agent": "com.google.android.youtube/19.09.37 (Linux; U; Android 12) gzip",
+                "Accept": "*/*",
+                "Accept-Language": "en-US,en;q=0.9",
+                "Accept-Encoding": "gzip, deflate",
+                "Connection": "keep-alive",
+            },
+            "retries": 10,
+            "fragment_retries": 20,
+            "file_access_retries": 10,
+            "socket_timeout": 120,
             "ignoreerrors": False,
-            "no_warnings": False,  # Enable warnings for debugging
-            
-            # Cookie file for age-restricted videos
-            "cookiefile": self._find_cookie_file(),
-            
-            # User agent to avoid blocking
-            "user_agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-            
-            # Extract flat info first (faster)
-            "extract_flat": False,
-            
-            # No playlist
+            "no_warnings": False,
             "noplaylist": True,
-            
-            # Quiet mode
             "quiet": False,
             "no_color": True,
         }
+        return self._execute_download(ydl_opts, video_url, video_id)
 
-        # Only add YouTube-specific options if not using Invidious
-        if not use_invidious:
-            # Only use web client when cookies are provided (android/ios don't support cookies)
-            if not self._find_cookie_file():
-                ydl_opts.update({
-                    # Bypass YouTube bot detection - use Android client
-                    "extractor_args": {
-                        "youtube": {
-                            "player_client": ["android", "ios", "web"],
-                            "player_skip": ["configs", "js", "webpage"],
-                        }
-                    },
-                    # Additional headers to avoid blocking
-                    "http_headers": {
-                        "User-Agent": "com.google.android.youtube/19.09.37 (Linux; U; Android 12) gzip",
-                        "Accept": "*/*",
-                        "Accept-Language": "en-US,en;q=0.9",
-                        "Accept-Encoding": "gzip, deflate",
-                        "Connection": "keep-alive",
-                    },
-                })
+    def _download_with_ios_client(self, video_url: str, video_id: str, output_template: str) -> Optional[Path]:
+        """Download using iOS client."""
+        ydl_opts = {
+            "format": "best[ext=mp4]/best",
+            "outtmpl": output_template,
+            "merge_output_format": "mp4",
+            "extractor_args": {
+                "youtube": {
+                    "player_client": ["ios"],
+                    "player_skip": ["configs", "js", "webpage"],
+                }
+            },
+            "http_headers": {
+                "User-Agent": "com.google.ios.youtube/19.09.3 (iPhone14,3; U; CPU iOS 15_0 like Mac OS X)",
+                "Accept": "*/*",
+                "Accept-Language": "en-US,en;q=0.9",
+                "Accept-Encoding": "gzip, deflate",
+                "Connection": "keep-alive",
+            },
+            "retries": 10,
+            "fragment_retries": 20,
+            "file_access_retries": 10,
+            "socket_timeout": 120,
+            "ignoreerrors": False,
+            "no_warnings": False,
+            "noplaylist": True,
+            "quiet": False,
+            "no_color": True,
+        }
+        return self._execute_download(ydl_opts, video_url, video_id)
+
+    def _download_with_web_client(self, video_url: str, video_id: str, output_template: str) -> Optional[Path]:
+        """Download using Web client with cookies."""
+        ydl_opts = {
+            "format": "best[ext=mp4]/best",
+            "outtmpl": output_template,
+            "merge_output_format": "mp4",
+            "cookiefile": self._find_cookie_file(),
+            "extractor_args": {
+                "youtube": {
+                    "player_client": ["web"],
+                }
+            },
+            "user_agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+            "retries": 10,
+            "fragment_retries": 20,
+            "file_access_retries": 10,
+            "socket_timeout": 120,
+            "ignoreerrors": False,
+            "no_warnings": False,
+            "noplaylist": True,
+            "quiet": False,
+            "no_color": True,
+        }
+        return self._execute_download(ydl_opts, video_url, video_id)
+
+    def _download_with_invidious(self, video_url: str, video_id: str, output_template: str) -> Optional[Path]:
+        """Download using Invidious instance."""
+        ydl_opts = {
+            "format": "best[ext=mp4]/best",
+            "outtmpl": output_template,
+            "merge_output_format": "mp4",
+            "retries": 10,
+            "fragment_retries": 20,
+            "file_access_retries": 10,
+            "socket_timeout": 120,
+            "ignoreerrors": False,
+            "no_warnings": False,
+            "noplaylist": True,
+            "quiet": False,
+            "no_color": True,
+        }
+        return self._execute_download(ydl_opts, video_url, video_id)
+
+    def _download_with_subprocess(self, video_url: str, video_id: str, output_template: str) -> Optional[Path]:
+        """Download using subprocess with aggressive options."""
+        try:
+            cmd = [
+                "yt-dlp",
+                "--format", "best[ext=mp4]/best",
+                "--output", output_template,
+                "--merge-output-format", "mp4",
+                "--extractor-args", "youtube:player_client=android",
+                "--extractor-args", "youtube:player_skip=configs,js,webpage",
+                "--user-agent", "com.google.android.youtube/19.09.37 (Linux; U; Android 12) gzip",
+                "--retries", "10",
+                "--fragment-retries", "20",
+                "--socket-timeout", "120",
+                "--no-playlist",
+                "--no-warnings",
+                video_url
+            ]
+            
+            # Add cookies if available
+            cookie_file = self._find_cookie_file()
+            if cookie_file:
+                cmd.extend(["--cookies", cookie_file])
+            
+            logger.info(f"🚀 Running subprocess command: {' '.join(cmd[:5])}...")
+            
+            result = subprocess.run(
+                cmd,
+                capture_output=True,
+                text=True,
+                timeout=300
+            )
+            
+            if result.returncode == 0:
+                logger.info(f"✅ Subprocess download successful")
+                # Find the downloaded file
+                return self._find_downloaded_file(video_id)
             else:
-                # When using cookies, only use web client
-                ydl_opts.update({
-                    "extractor_args": {
-                        "youtube": {
-                            "player_client": ["web"],
-                        }
-                    },
-                })
+                logger.error(f"❌ Subprocess download failed: {result.stderr}")
+                return None
+                
+        except subprocess.TimeoutExpired:
+            logger.error(f"❌ Subprocess download timed out")
+            return None
+        except Exception as e:
+            logger.error(f"❌ Subprocess download error: {e}")
+            return None
 
+    def _execute_download(self, ydl_opts: dict, video_url: str, video_id: str) -> Optional[Path]:
+        """Execute download with given options."""
         # Remove None options
         ydl_opts = {k: v for k, v in ydl_opts.items() if v is not None}
 
         try:
             logger.info(f"🎬 Starting download: {video_url}")
-            logger.info(f"📁 Output template: {output_template}")
             
             with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-                # First, try to get info without downloading
-                try:
-                    info = ydl.extract_info(video_url, download=False)
-                    if info:
-                        title = info.get("title", "Unknown")
-                        duration = info.get("duration", 0)
-                        logger.info(f"📹 Video info: {title} ({duration}s)")
-                except Exception as e:
-                    logger.warning(f"Could not get video info: {e}")
-                
-                # Now download
+                # Download
                 info = ydl.extract_info(video_url, download=True)
                 
                 # Get the actual downloaded filename
                 if info:
-                    duration = info.get("duration", 0)
                     title = info.get("title", "Unknown")
+                    duration = info.get("duration", 0)
                     logger.info(f"✅ Downloaded: {title} (Duration: {duration}s)")
                     
                     # Find the downloaded file
@@ -213,11 +286,9 @@ class VideoDownloader:
 
         except yt_dlp.DownloadError as e:
             logger.error(f"❌ Download error for {video_id}: {e}")
-            logger.error(f"   Error type: {type(e).__name__}")
             return None
         except Exception as e:
             logger.error(f"❌ Unexpected error downloading {video_id}: {e}")
-            logger.error(f"   Error type: {type(e).__name__}")
             import traceback
             logger.error(f"   Traceback: {traceback.format_exc()}")
             return None
@@ -248,18 +319,8 @@ class VideoDownloader:
             if p.exists():
                 logger.info(f"🍪 Using cookie file: {p}")
                 return str(p)
-        logger.info("🍪 No cookie file found (age-restricted videos may fail)")
+        logger.info("🍪 No cookie file found")
         return None
-
-    def _progress_hook(self, d):
-        """Progress hook for yt-dlp downloads."""
-        if d["status"] == "downloading":
-            percent = d.get("_percent_str", "N/A")
-            speed = d.get("_speed_str", "N/A")
-            eta = d.get("_eta_str", "N/A")
-            logger.info(f"⬇️  Download: {percent} | Speed: {speed} | ETA: {eta}")
-        elif d["status"] == "finished":
-            logger.info("✅ Download finished, processing...")
 
     def get_video_info(self, video_url: str) -> Optional[dict]:
         """
@@ -274,35 +335,22 @@ class VideoDownloader:
         ydl_opts = {
             "quiet": True,
             "no_warnings": True,
-            "cookiefile": self._find_cookie_file(),
+            "extract_flat": False,
+            "noplaylist": True,
         }
         
-        # Only use web client when cookies are provided
-        if not self._find_cookie_file():
-            ydl_opts.update({
-                # Bypass YouTube bot detection
-                "extractor_args": {
-                    "youtube": {
-                        "player_client": ["android", "ios", "web"],
-                        "player_skip": ["configs", "js", "webpage"],
-                    }
-                },
-                "http_headers": {
-                    "User-Agent": "com.google.android.youtube/19.09.37 (Linux; U; Android 12) gzip",
-                    "Accept": "*/*",
-                    "Accept-Language": "en-US,en;q=0.9",
-                    "Accept-Encoding": "gzip, deflate",
-                    "Connection": "keep-alive",
-                },
-            })
-        else:
-            ydl_opts.update({
-                "extractor_args": {
-                    "youtube": {
-                        "player_client": ["web"],
-                    }
-                },
-            })
+        # Try Android client first
+        ydl_opts.update({
+            "extractor_args": {
+                "youtube": {
+                    "player_client": ["android"],
+                    "player_skip": ["configs", "js", "webpage"],
+                }
+            },
+            "http_headers": {
+                "User-Agent": "com.google.android.youtube/19.09.37 (Linux; U; Android 12) gzip",
+            },
+        })
         
         ydl_opts = {k: v for k, v in ydl_opts.items() if v is not None}
 
