@@ -98,8 +98,8 @@ class VideoDownloader:
         """
         # Enhanced yt-dlp options
         ydl_opts = {
-            # Format selection with fallbacks
-            "format": "bestvideo[ext=mp4][height<=1080]+bestaudio[ext=m4a]/bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best",
+            # More permissive format selection - try any available format
+            "format": "best[ext=mp4]/bestvideo+bestaudio/best",
             "outtmpl": output_template,
             "merge_output_format": "mp4",
             
@@ -145,23 +145,34 @@ class VideoDownloader:
 
         # Only add YouTube-specific options if not using Invidious
         if not use_invidious:
-            ydl_opts.update({
-                # Bypass YouTube bot detection - use Android client
-                "extractor_args": {
-                    "youtube": {
-                        "player_client": ["android", "ios", "web"],
-                        "player_skip": ["configs", "js", "webpage"],
-                    }
-                },
-                # Additional headers to avoid blocking
-                "http_headers": {
-                    "User-Agent": "com.google.android.youtube/19.09.37 (Linux; U; Android 12) gzip",
-                    "Accept": "*/*",
-                    "Accept-Language": "en-US,en;q=0.9",
-                    "Accept-Encoding": "gzip, deflate",
-                    "Connection": "keep-alive",
-                },
-            })
+            # Only use web client when cookies are provided (android/ios don't support cookies)
+            if not self._find_cookie_file():
+                ydl_opts.update({
+                    # Bypass YouTube bot detection - use Android client
+                    "extractor_args": {
+                        "youtube": {
+                            "player_client": ["android", "ios", "web"],
+                            "player_skip": ["configs", "js", "webpage"],
+                        }
+                    },
+                    # Additional headers to avoid blocking
+                    "http_headers": {
+                        "User-Agent": "com.google.android.youtube/19.09.37 (Linux; U; Android 12) gzip",
+                        "Accept": "*/*",
+                        "Accept-Language": "en-US,en;q=0.9",
+                        "Accept-Encoding": "gzip, deflate",
+                        "Connection": "keep-alive",
+                    },
+                })
+            else:
+                # When using cookies, only use web client
+                ydl_opts.update({
+                    "extractor_args": {
+                        "youtube": {
+                            "player_client": ["web"],
+                        }
+                    },
+                })
 
         # Remove None options
         ydl_opts = {k: v for k, v in ydl_opts.items() if v is not None}
@@ -264,21 +275,35 @@ class VideoDownloader:
             "quiet": True,
             "no_warnings": True,
             "cookiefile": self._find_cookie_file(),
-            # Bypass YouTube bot detection
-            "extractor_args": {
-                "youtube": {
-                    "player_client": ["android", "ios", "web"],
-                    "player_skip": ["configs", "js", "webpage"],
-                }
-            },
-            "http_headers": {
-                "User-Agent": "com.google.android.youtube/19.09.37 (Linux; U; Android 12) gzip",
-                "Accept": "*/*",
-                "Accept-Language": "en-US,en;q=0.9",
-                "Accept-Encoding": "gzip, deflate",
-                "Connection": "keep-alive",
-            },
         }
+        
+        # Only use web client when cookies are provided
+        if not self._find_cookie_file():
+            ydl_opts.update({
+                # Bypass YouTube bot detection
+                "extractor_args": {
+                    "youtube": {
+                        "player_client": ["android", "ios", "web"],
+                        "player_skip": ["configs", "js", "webpage"],
+                    }
+                },
+                "http_headers": {
+                    "User-Agent": "com.google.android.youtube/19.09.37 (Linux; U; Android 12) gzip",
+                    "Accept": "*/*",
+                    "Accept-Language": "en-US,en;q=0.9",
+                    "Accept-Encoding": "gzip, deflate",
+                    "Connection": "keep-alive",
+                },
+            })
+        else:
+            ydl_opts.update({
+                "extractor_args": {
+                    "youtube": {
+                        "player_client": ["web"],
+                    }
+                },
+            })
+        
         ydl_opts = {k: v for k, v in ydl_opts.items() if v is not None}
 
         try:
