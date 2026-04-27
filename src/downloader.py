@@ -109,6 +109,7 @@ class VideoDownloader:
             "format": "best[ext=mp4]/best",
             "outtmpl": output_template,
             "merge_output_format": "mp4",
+            "cookiefile": self._find_cookie_file(),
             "extractor_args": {
                 "youtube": {
                     "player_client": ["android"],
@@ -140,6 +141,7 @@ class VideoDownloader:
             "format": "best[ext=mp4]/best",
             "outtmpl": output_template,
             "merge_output_format": "mp4",
+            "cookiefile": self._find_cookie_file(),
             "extractor_args": {
                 "youtube": {
                     "player_client": ["ios"],
@@ -196,6 +198,7 @@ class VideoDownloader:
             "format": "best[ext=mp4]/best",
             "outtmpl": output_template,
             "merge_output_format": "mp4",
+            "cookiefile": self._find_cookie_file(),
             "retries": 10,
             "fragment_retries": 20,
             "file_access_retries": 10,
