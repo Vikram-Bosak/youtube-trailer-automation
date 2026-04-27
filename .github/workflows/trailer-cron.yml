@@ -84,6 +84,7 @@ jobs:
         env:
           GOOGLE_CLIENT_SECRETS: ${{ secrets.GOOGLE_CLIENT_SECRETS }}
           GOOGLE_OAUTH_TOKEN: ${{ secrets.GOOGLE_OAUTH_TOKEN }}
+          YOUTUBE_COOKIES: ${{ secrets.YOUTUBE_COOKIES }}
         run: |
           # Write client_secrets.json from environment variable
           cat > client_secrets.json << EOF
@@ -94,6 +95,16 @@ jobs:
           cat > oauth_token.json << EOF
           $GOOGLE_OAUTH_TOKEN
           EOF
+          
+          # Write cookies.txt from environment variable (if provided)
+          if [ -n "$YOUTUBE_COOKIES" ]; then
+            cat > cookies.txt << EOF
+            $YOUTUBE_COOKIES
+            EOF
+            echo "cookies.txt created ($(wc -c < cookies.txt) bytes)"
+          else
+            echo "No YOUTUBE_COOKIES secret provided - downloads may fail due to bot detection"
+          fi
           
           # Verify files were created
           echo "client_secrets.json size: $(wc -c < client_secrets.json)"
@@ -132,5 +143,5 @@ jobs:
       - name: Cleanup
         if: always()
         run: |
-          rm -f client_secrets.json oauth_token.json
+          rm -f client_secrets.json oauth_token.json cookies.txt
           rm -rf downloads/* processed/*
