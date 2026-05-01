@@ -1,6 +1,13 @@
 {
-  "processed_videos": {},
-  "daily_upload_count": 0,
+  "processed_videos": {
+    "48qIf7tGQXo": {
+      "original_title": "Black Bag | George Spies on Kathryn With a Satellite",
+      "uploaded_id": "NM0NBGWiEbw",
+      "uploaded_url": "https://www.youtube.com/watch?v=NM0NBGWiEbw",
+      "processed_at": "2026-05-01T22:29:47.531963"
+    }
+  },
+  "daily_upload_count": 1,
   "last_upload_date": "2026-05-01",
   "last_scan": null
 }
